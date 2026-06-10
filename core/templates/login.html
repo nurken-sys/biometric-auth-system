@@ -1,0 +1,401 @@
+{% load static %}
+<!doctype html>
+<html lang="{{ lang|default:'ru' }}">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>{{ t.btn_login|default:"Вход" }} — BiometricAuth</title>
+
+  <link rel="stylesheet" href="{% static 'style.css' %}">
+  {% with "style_"|add:lang|default:"ru"|add:".css" as style_file %}
+    <link rel="stylesheet" href="{% static style_file %}">
+  {% endwith %}
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+
+  <style>
+    .app-header { display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; background: var(--bg-secondary); border-radius: 12px; margin-bottom: 20px; flex-wrap: wrap; gap: 15px;}
+    .app-title { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;}
+    .header-controls { display: flex; align-items: center; gap: 15px; flex-wrap: wrap;}
+
+    .cam-container { position:relative; width:100%; max-width:420px; margin:10px auto; border-radius:16px; overflow:hidden; background:#000; box-shadow:0 10px 30px rgba(0,0,0,.25); }
+    #video { width:100%; display:block; transform:scaleX(-1); }
+    #overlay { position:absolute; left:0; top:0; width:100%; height:100%; pointer-events:none; transform:scaleX(-1); }
+    
+    .cam-hint { text-align:center; margin:8px 0 15px; color:var(--text-muted); font-size:.9em; }
+    .progress-container { margin:15px 0; display:none; }
+    .progress-bar { width:100%; height:8px; background:var(--bg-tertiary); border-radius:4px; overflow:hidden; margin-bottom:10px; }
+    .progress-fill { height:100%; background:linear-gradient(90deg,var(--primary-color),var(--success-color)); width:0%; transition:width .2s ease; }
+    .challenge-box { display:none; background:rgba(59,130,246,.08); border:1px solid var(--primary-color); border-radius:10px; padding:14px; margin:14px 0; text-align:center; font-weight:700; }
+    .status-message { padding:10px 14px; border-radius:8px; margin:10px 0; }
+    .status-message.success { background:rgba(34,197,94,.1); border:1px solid #22c55e; color:#22c55e; }
+    .status-message.error { background:rgba(239,68,68,.1); border:1px solid #ef4444; color:#ef4444; }
+    .status-message.warning { background:rgba(245,158,11,.1); border:1px solid #f59e0b; color:#f59e0b; }
+    .status-message.info { background:rgba(59,130,246,.1); border:1px solid #3b82f6; color:#3b82f6; }
+    .biometric-status { display:flex; justify-content:space-between; gap:10px; margin:14px 0; padding:14px; background:var(--bg-tertiary); border-radius:10px; }
+    .status-item { text-align:center; flex:1; }
+    .status-label { font-size:.9em; color:var(--text-muted); margin-bottom:4px; }
+    .status-value { font-size:1.05em; font-weight:700; }
+    .good { color:var(--success-color); }
+    .bad { color:var(--danger-color); }
+    .warning { color:var(--warning-color); }
+    .action-buttons { display:flex; gap:10px; margin-top:18px; flex-wrap:wrap; }
+    .btn { flex:1; min-width:140px; }
+    .btn:disabled { opacity:.6; cursor:not-allowed; }
+  </style>
+</head>
+
+<body class="lang-{{ lang|default:'ru' }} theme-dark">
+  <div class="container">
+    <div style="display: none;">{% csrf_token %}</div>
+
+    <header class="app-header">
+      <div class="app-title">
+        <h1><i class="fas fa-sign-in-alt"></i> {{ t.btn_login|default:"Вход" }}</h1>
+        <span class="badge">{{ t.biometric_login|default:"Биометрический вход" }}</span>
+      </div>
+      <div class="header-controls">
+        <a href="{% url 'recovery' %}" id="recoveryLink" style="display: inline-flex; flex-direction: column; align-items: center; color: var(--text-muted); text-decoration: none; margin-right: 15px; transition: 0.3s;">
+            <i class="fas fa-headset" style="font-size: 1.6em; color: var(--primary-color); margin-bottom: 4px;"></i>
+            <span style="font-size: 0.8em;" id="supportText">Служба поддержки</span>
+        </a>
+        <a class="btn btn-outline" href="{% url 'index' %}"><i class="fas fa-home"></i> <span id="homeBtnTxt">На главную</span></a>
+      </div>
+    </header>
+
+    <section class="card">
+      <div class="form-group">
+        <label for="username"><i class="fas fa-user"></i> <span id="nameLabel">Имя пользователя</span></label>
+        <input type="text" id="username" placeholder="a-z" autocomplete="off">
+        <p class="cam-hint" id="nameHint"><i class="fas fa-info-circle"></i> Введите никнейм, затем смотрите в камеру</p>
+      </div>
+
+      <div class="cam-container">
+        <video id="video" autoplay playsinline muted></video>
+        <canvas id="overlay"></canvas>
+      </div>
+
+      <div class="cam-hint" id="soundHint"><i class="fas fa-volume-up"></i> Включите звук на устройстве</div>
+
+      <canvas id="photoCanvas" style="display:none;"></canvas>
+
+      <div class="biometric-status" id="biometricStatus">
+        <div class="status-item">
+          <div class="status-label" id="lblFace">Лицо</div>
+          <div class="status-value" id="faceStatus">—</div>
+        </div>
+        <div class="status-item">
+          <div class="status-label" id="lblVoice">Голос</div>
+          <div class="status-value" id="voiceStatus">—</div>
+        </div>
+        <div class="status-item">
+          <div class="status-label" id="lblPhrase">Фраза</div>
+          <div class="status-value" id="phraseStatus">—</div>
+        </div>
+      </div>
+
+      <div class="progress-container" id="progressContainer">
+        <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+        <div class="progress-text" id="progressText"></div>
+      </div>
+
+      <div class="challenge-box" id="challengeBox">
+        <i class="fas fa-microphone"></i>
+        <span id="challengeText" style="font-size:1.2rem; color:#00ff78;"></span>
+      </div>
+
+      <div id="statusMessages"></div>
+
+      <div class="action-buttons">
+        <button class="btn btn-primary" id="startLogin"><i class="fas fa-play"></i> <span id="startBtnTxt">Начать</span></button>
+        <button class="btn btn-outline" id="retryBtn" style="display:none;"><i class="fas fa-redo"></i> <span id="retryBtnTxt">Повторить</span></button>
+      </div>
+    </section>
+  </div>
+
+<script>
+  const CONFIG = {
+    recordSeconds: {{ rec|default:5 }},
+    csrfToken: document.querySelector('[name=csrfmiddlewaretoken]').value,
+    phraseThreshold: 0.60
+  };
+
+  const currentLang = "{{ lang|default:'ru' }}";
+  
+  // ақаулықтар кезіндегі хабарламалар
+  const msgDict = {
+    'ru': {
+        'only_az': 'Только строчные английские буквы (a-z)!',
+        'no_name': 'Введите никнейм',
+        'no_face': 'Смотрите в камеру',
+        'cam_ready': 'Камера готова',
+        'scan_face': 'Сканируем лицо...',
+        'read_phrase': 'Прочитайте эту фразу вслух...',
+        'voice_warn': 'Внимание! Запись голоса началась...',
+        'voice_rec': '🔴 ЗАПИСЬ: ',
+        'voice_done': '✅ Запись завершена. Проверяем...',
+        'check_data': 'Сверка данных с сервером...',
+        'login_process': 'Вход...',
+        'success': 'Вход выполнен успешно!',
+        'err_phrase': 'Фраза не совпала.',
+        'err_voice': 'Голос не совпал (подойдите ближе к микрофону).',
+        'err_not_found': 'Пользователь не найден. Проверьте никнейм.',
+        'err_face_match': 'Лицо не совпадает. Доступ запрещен.',
+        'ui_home': 'На главную',
+        'ui_name_lbl': 'Имя пользователя',
+        'ui_name_hnt': 'Введите никнейм, затем смотрите в камеру',
+        'ui_snd_hnt': 'Включите звук на устройстве',
+        'ui_rec_lnk': 'Служба поддержки',
+        'ui_lbl_f': 'Лицо', 'ui_lbl_v': 'Голос', 'ui_lbl_p': 'Фраза',
+        'ui_start': 'Начать',
+        'ui_retry': 'Повторить'
+    },
+    'kz': {
+        'only_az': 'Тек кіші ағылшын әріптері (a-z)!',
+        'no_name': 'Никнеймді енгізіңіз',
+        'no_face': 'Камераға қараңыз',
+        'cam_ready': 'Камера дайын',
+        'scan_face': 'Бет-әлпетті сканерлеу...',
+        'read_phrase': 'Осы фразаны дауыстап оқыңыз...',
+        'voice_warn': 'Назар аударыңыз! Дауыс жазу басталды...',
+        'voice_rec': '🔴 ЖАЗУ: ',
+        'voice_done': '✅ Жазу аяқталды. Тексерілуде...',
+        'check_data': 'Деректерді сервермен салыстыру...',
+        'login_process': 'Кіру...',
+        'success': 'Жүйеге сәтті кірдіңіз!',
+        'err_phrase': 'Фраза сәйкес келмеді.',
+        'err_voice': 'Дауыс сәйкес келмеді (микрофонға жақындаңыз).',
+        'err_not_found': 'Пайдаланушы табылмады. Никнеймді тексеріңіз.',
+        'err_face_match': 'Бет-әлпет сәйкес келмейді. Кіруге тыйым салынған.',
+        'ui_home': 'Басты бетке',
+        'ui_name_lbl': 'Пайдаланушы аты',
+        'ui_name_hnt': 'Никнеймді енгізіп, камераға қараңыз',
+        'ui_snd_hnt': 'Құрылғыда дыбысты қосыңыз',
+        'ui_rec_lnk': 'Қолдау қызметі',
+        'ui_lbl_f': 'Бет', 'ui_lbl_v': 'Дауыс', 'ui_lbl_p': 'Фраза',
+        'ui_start': 'Бастау',
+        'ui_retry': 'Қайталау'
+    },
+    'en': {
+        'only_az': 'Lowercase English letters only (a-z)!',
+        'no_name': 'Enter a nickname',
+        'no_face': 'Look at the camera',
+        'cam_ready': 'Camera ready',
+        'scan_face': 'Scanning face...',
+        'read_phrase': 'Read this phrase out loud...',
+        'voice_warn': 'Attention! Voice recording has started...',
+        'voice_rec': '🔴 RECORDING: ',
+        'voice_done': '✅ Recording complete. Checking...',
+        'check_data': 'Checking data with server...',
+        'login_process': 'Logging in...',
+        'success': 'Login successful!',
+        'err_phrase': 'Phrase did not match.',
+        'err_voice': 'Voice did not match (move closer to the microphone).',
+        'err_not_found': 'User not found. Check your nickname.',
+        'err_face_match': 'Face does not match. Access denied.',
+        'ui_home': 'Home',
+        'ui_name_lbl': 'Username',
+        'ui_name_hnt': 'Enter your nickname, then look at the camera',
+        'ui_snd_hnt': 'Turn on device sound',
+        'ui_rec_lnk': 'Support Service',
+        'ui_lbl_f': 'Face', 'ui_lbl_v': 'Voice', 'ui_lbl_p': 'Phrase',
+        'ui_start': 'Start',
+        'ui_retry': 'Retry'
+    }
+  };
+  const m = msgDict[currentLang] || msgDict['ru'];
+
+  const video = document.getElementById('video');
+  const overlay = document.getElementById('overlay');
+  const octx = overlay.getContext('2d');
+  const photoCanvas = document.getElementById('photoCanvas');
+  const usernameInput = document.getElementById('username');
+  const startBtn = document.getElementById('startLogin');
+  const retryBtn = document.getElementById('retryBtn');
+  const challengeBox = document.getElementById('challengeBox');
+  const challengeText = document.getElementById('challengeText');
+  const progressContainer = document.getElementById('progressContainer');
+  const progressFill = document.getElementById('progressFill');
+  const progressText = document.getElementById('progressText');
+  const statusMessages = document.getElementById('statusMessages');
+  const faceStatus = document.getElementById('faceStatus');
+  const voiceStatus = document.getElementById('voiceStatus');
+  const phraseStatus = document.getElementById('phraseStatus');
+
+  let isProcessing = false; let hasFace = false;
+
+  document.addEventListener('DOMContentLoaded', ()=>{
+    document.getElementById('homeBtnTxt').innerText = m.ui_home;
+    document.getElementById('nameLabel').innerText = m.ui_name_lbl;
+    document.getElementById('nameHint').innerHTML = `<i class="fas fa-info-circle"></i> ${m.ui_name_hnt}`;
+    document.getElementById('soundHint').innerHTML = `<i class="fas fa-volume-up"></i> ${m.ui_snd_hnt}`;
+    document.getElementById('supportText').innerText = m.ui_rec_lnk;
+    document.getElementById('lblFace').innerText = m.ui_lbl_f;
+    document.getElementById('lblVoice').innerText = m.ui_lbl_v;
+    document.getElementById('lblPhrase').innerText = m.ui_lbl_p;
+    document.getElementById('startBtnTxt').innerText = m.ui_start;
+    document.getElementById('retryBtnTxt').innerText = m.ui_retry;
+
+    startBtn.addEventListener('click', performLogin);
+    retryBtn.addEventListener('click', ()=>{ startBtn.disabled=false; performLogin(); });
+    initCamera();
+  });
+
+  usernameInput.addEventListener('input', function(e) {
+      const originalValue = this.value;
+      const cleanedValue = originalValue.toLowerCase().replace(/[^a-z]/g, '');
+      if (originalValue !== cleanedValue) {
+          this.value = cleanedValue; showMessage(m.only_az, 'warning');
+      }
+  });
+
+  function showMessage(text, type='info'){
+    const d = document.createElement('div');
+    d.className = `status-message ${type}`;
+    d.innerHTML = `<i class="fas fa-${type==='success'?'check-circle':type==='warning'?'exclamation-triangle':type==='error'?'exclamation-circle':'info-circle'}"></i> ${text}`;
+    statusMessages.insertBefore(d, statusMessages.firstChild);
+    setTimeout(()=>{ d.remove(); }, 6500);
+  }
+
+  function setStatus(el, cls, txt){ el.textContent = txt; el.className = `status-value ${cls}`; }
+
+  function updateProgress(p, txt){
+    progressContainer.style.display = 'block'; progressFill.style.width = p + '%'; progressText.textContent = txt;
+  }
+
+  function resizeOverlay(){
+    if (video.videoWidth > 0 && (overlay.width !== video.videoWidth || overlay.height !== video.videoHeight)) {
+      overlay.width = video.videoWidth; overlay.height = video.videoHeight;
+    }
+  }
+
+  function playAudioPrompt(filename) {
+      return new Promise((resolve) => {
+          const audio = new Audio(`/static/audio/${currentLang}/${filename}`);
+          audio.onended = resolve; audio.onerror = () => resolve(); 
+          audio.play().catch(resolve);
+      });
+  }
+
+  async function initCamera(){
+    try{
+      await faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights/');
+      const stream = await navigator.mediaDevices.getUserMedia({ video:{facingMode:'user'}, audio:false });
+      video.srcObject = stream;
+      await video.play();
+      showMessage(m.cam_ready, 'success');
+      
+      setInterval(async () => {
+        if(!video || video.readyState < 2) return;
+        resizeOverlay();
+        const detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions());
+        octx.clearRect(0,0,overlay.width, overlay.height);
+        if(detection){
+          hasFace = true;
+          const f = detection.box;
+          const padY = f.height * 0.15; const padX = f.width * 0.05;
+          const x = f.x - padX; const y = f.y - padY;
+          const w = f.width + (padX * 2); const h = f.height + (padY * 2);
+          const cornerLen = Math.min(w, h) * 0.2; const cornerThick = 4;
+          octx.strokeStyle = "#00ff78"; octx.lineWidth = cornerThick; octx.lineJoin = "round";
+          octx.beginPath();
+          octx.moveTo(x, y + cornerLen); octx.lineTo(x, y); octx.lineTo(x + cornerLen, y);
+          octx.moveTo(x + w - cornerLen, y); octx.lineTo(x + w, y); octx.lineTo(x + w, y + cornerLen);
+          octx.moveTo(x + w, y + h - cornerLen); octx.lineTo(x + w, y + h); octx.lineTo(x + w - cornerLen, y + h);
+          octx.moveTo(x + cornerLen, y + h); octx.lineTo(x, y + h); octx.lineTo(x, y + h - cornerLen);
+          octx.stroke();
+        } else { hasFace = false; }
+      }, 100);
+    }catch(err){ showMessage('Ошибка камеры', 'error'); startBtn.disabled = true; }
+  }
+
+  function takePhoto(){
+    photoCanvas.width = video.videoWidth; photoCanvas.height = video.videoHeight;
+    const ctx = photoCanvas.getContext('2d');
+    ctx.translate(photoCanvas.width, 0); ctx.scale(-1, 1); ctx.drawImage(video, 0, 0);
+    return new Promise(res=> photoCanvas.toBlob(b=>res(b), 'image/jpeg', 0.9));
+  }
+
+  async function performLogin(){
+    if(isProcessing) return;
+    const username = usernameInput.value.trim();
+    if(!username){ showMessage(m.no_name,'error'); return; }
+    if(!hasFace){ showMessage(m.no_face,'error'); return; }
+
+    isProcessing = true; startBtn.disabled = true; retryBtn.style.display='none'; statusMessages.innerHTML='';
+
+    try{
+      setStatus(faceStatus,'warning','...'); setStatus(voiceStatus,'warning','—'); setStatus(phraseStatus,'warning','—');
+      
+      showMessage(m.scan_face, 'info');
+      await playAudioPrompt('log_start.mp3');
+      const faceBlob = await takePhoto();
+      setStatus(faceStatus,'good','OK');
+
+      const r_chal = await fetch('{% url "api_challenge" %}?t=' + new Date().getTime());
+      const d_chal = await r_chal.json();
+      challengeText.textContent = d_chal.challenge; 
+      challengeBox.style.display = 'block';
+      
+      showMessage(m.read_phrase, 'info');
+      await playAudioPrompt('voice.mp3');
+      showMessage(m.voice_warn, 'warning');
+
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      const chunks = [];
+      mediaRecorder.ondataavailable = e => chunks.push(e.data);
+      mediaRecorder.start();
+      
+      for(let i=CONFIG.recordSeconds; i>0; i--){
+        updateProgress(((CONFIG.recordSeconds-i)/CONFIG.recordSeconds)*100, m.voice_rec + i + 's...');
+        await new Promise(r => setTimeout(r, 1000));
+      }
+      mediaRecorder.stop();
+      stream.getTracks().forEach(t => t.stop());
+      const audioBlob = await new Promise(res => { mediaRecorder.onstop = () => res(new Blob(chunks, { type: 'audio/wav' })); });
+      
+      showMessage(m.voice_done, 'success');
+      setStatus(voiceStatus,'good','OK');
+      updateProgress(70, m.check_data);
+
+      const fd = new FormData();
+      fd.append('audio', audioBlob, 'audio.wav'); fd.append('username', username);
+      const r_vr = await fetch('{% url "verify_audio" %}', { method:'POST', body:fd, headers:{ 'X-CSRFToken': CONFIG.csrfToken } });
+      const vr = await r_vr.json();
+
+      if(vr.phrase_score >= CONFIG.phraseThreshold){ setStatus(phraseStatus,'good','OK'); } 
+      else { setStatus(phraseStatus,'bad','X'); throw new Error(m.err_phrase); }
+
+      if(vr.voice_ok){ setStatus(voiceStatus,'good','OK'); } 
+      else { setStatus(voiceStatus,'bad','X'); throw new Error(m.err_voice); }
+
+      updateProgress(90, m.login_process);
+      const fd2 = new FormData();
+      fd2.append('username', username); fd2.append('face_image', faceBlob, 'face.jpg'); fd2.append('voice_recording', audioBlob, 'voice.wav');
+      const r_log = await fetch('{% url "login" %}', { method:'POST', body:fd2, headers:{ 'X-CSRFToken': CONFIG.csrfToken } });
+      const res = await r_log.json();
+      
+      if(!res.success) throw new Error(res.error); // Выбрасываем ошибку бэкенда
+
+      updateProgress(100,'100%');
+      await playAudioPrompt('log_ok.mp3');
+      showMessage(m.success,'success');
+      setTimeout(()=> window.location.href = res.redirect || '{% url "dashboard" %}', 1000);
+
+    }catch(e){
+      await playAudioPrompt('log_fail.mp3');
+      
+      let errorMsg = e.message;
+      if (errorMsg.includes('не найден') || errorMsg.includes('not found')) errorMsg = m.err_not_found;
+      if (errorMsg.includes('не совпадает') || errorMsg.includes('does not match')) errorMsg = m.err_face_match;
+      
+      showMessage(errorMsg,'error'); 
+      retryBtn.style.display='inline-block'; startBtn.disabled=false;
+    }finally{
+      isProcessing=false; progressContainer.style.display='none'; challengeBox.style.display='none';
+    }
+  }
+</script>
+</body>
+</html>

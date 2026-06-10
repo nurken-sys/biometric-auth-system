@@ -1,0 +1,93 @@
+{% load static %}
+<!doctype html>
+<html lang="{{ lang|default:'ru' }}">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>BiometricAuth — {{ t.pick_lang_hint|default:"Выбор языка" }}</title>
+  
+  <link rel="stylesheet" href="{% static 'style.css' %}">
+  {% with "style_"|add:lang|default:"ru"|add:".css" as style_file %}
+    <link rel="stylesheet" href="{% static style_file %}">
+  {% endwith %}
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+
+<body class="lang-{{ lang|default:'ru' }} theme-dark">
+  <div class="container">
+    <header class="app-header">
+      <div class="app-title">
+        <h1>
+          <i class="fas fa-fingerprint"></i>
+          BiometricAuth
+          <span class="chip">{{ t.title|default:"BiometricAuth" }}</span>
+        </h1>
+        <span class="badge">
+          {{ t.pick_lang_hint|default:"Выберите язык" }} /
+          Интерфейс тілін таңдаңыз /
+          Choose interface language
+        </span>
+      </div>
+    </header>
+
+    {% if messages %}
+      <div class="flash-messages">
+        {% for message in messages %}
+          <div class="flash flash-{{ message.tags }}">
+            <i class="fas fa-{% if message.tags == 'success' %}check-circle{% elif message.tags == 'error' %}exclamation-circle{% else %}info-circle{% endif %}"></i>
+            {{ message }}
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    <section class="card language-card">
+      <div class="card-header">
+        <h2><i class="fas fa-globe"></i> {{ t.pick_lang_hint|default:"Выбор языка" }}</h2>
+        <span class="sub">Select your preferred language</span>
+      </div>
+
+      <div class="language-grid">
+        <a class="language-option ru" href="{% url 'set_language' 'ru' %}?next=index">
+          <span class="flag">🇷🇺</span>
+          <span class="name">Русский</span>
+          <span class="desc">Russian language</span>
+        </a>
+
+        <a class="language-option kz" href="{% url 'set_language' 'kz' %}?next=index">
+          <span class="flag">🇰🇿</span>
+          <span class="name">Қазақша</span>
+          <span class="desc">Kazakh language</span>
+        </a>
+
+        <a class="language-option en" href="{% url 'set_language' 'en' %}?next=index">
+          <span class="flag">🇺🇸</span>
+          <span class="name">English</span>
+          <span class="desc">English language</span>
+        </a>
+      </div>
+
+      <p class="muted text-center" style="margin-top:20px;">
+        <i class="fas fa-info-circle"></i>
+        После выбора языка откроется главная страница.
+      </p>
+    </section>
+  </div>
+
+  <style>
+    .language-card { max-width: 600px; margin: 0 auto; }
+    .language-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-top: 20px; }
+    .language-option { display: flex; flex-direction: column; align-items: center; padding: 25px 15px; border-radius: 12px; text-decoration: none; transition: all 0.3s ease; border: 2px solid transparent; background: rgba(var(--primary-color-rgb, 59, 130, 246), 0.05); }
+    .language-option.ru { border-color: rgba(34, 197, 94, 0.3); }
+    .language-option.kz { border-color: rgba(139, 92, 246, 0.3); }
+    .language-option.en { border-color: rgba(59, 130, 246, 0.3); }
+    .language-option:hover { transform: translateY(-5px); box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+    .language-option.ru:hover { background: rgba(34, 197, 94, 0.1); border-color: #22c55e; }
+    .language-option.kz:hover { background: rgba(139, 92, 246, 0.1); border-color: #8b5cf6; }
+    .language-option.en:hover { background: rgba(59, 130, 246, 0.1); border-color: #3b82f6; }
+    .language-option .flag { font-size: 2.5em; margin-bottom: 10px; }
+    .language-option .name { font-size: 1.2em; font-weight: 600; color: var(--text-primary); margin-bottom: 5px; }
+    .language-option .desc { font-size: 0.9em; color: var(--text-muted); }
+  </style>
+</body>
+</html>

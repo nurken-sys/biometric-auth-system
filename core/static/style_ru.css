@@ -1,0 +1,9 @@
+:root[lang="ru"] {
+    --primary-color: #22c55e;
+    --accent-color: #3b82f6;
+}
+
+body.lang-ru {
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+    letter-spacing: 0.01em;
+}

@@ -1,0 +1,245 @@
+{% load static %}
+<!doctype html>
+<html lang="{{ lang|default:'ru' }}">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>{{ t.title|default:"BiometricAuth" }}</title>
+
+  <link rel="stylesheet" href="{% static 'style.css' %}">
+  <!-- Динамическая загрузка файла стилей в зависимости от языка -->
+  {% with "style_"|add:lang|add:".css" as style_file %}
+    <link rel="stylesheet" href="{% static style_file %}">
+  {% endwith %}
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+
+<body class="lang-{{ lang|default:'ru' }} theme-dark">
+  <!-- Переключатель языка -->
+  <div class="lang-switch" id="langSwitch">
+    <button class="lang-btn">
+      <i class="fas fa-globe"></i>
+      <span>{{ lang|upper }}</span>
+      <i class="fas fa-chevron-down"></i>
+    </button>
+    <div class="lang-menu">
+      <a href="{% url 'set_language' 'ru' %}?next=index"
+         class="{% if lang == 'ru' %}active{% endif %}">RU</a>
+      <a href="{% url 'set_language' 'kz' %}?next=index"
+         class="{% if lang == 'kz' %}active{% endif %}">KZ</a>
+      <a href="{% url 'set_language' 'en' %}?next=index"
+         class="{% if lang == 'en' %}active{% endif %}">EN</a>
+    </div>
+  </div>
+
+  <div class="container">
+    <header class="app-header">
+      <div class="app-title">
+        <h1>
+          <i class="fas fa-fingerprint"></i>
+          BiometricAuth
+          <span class="chip">{{ t.title }}</span>
+        </h1>
+        <span class="badge">{{ t.pick_lang_hint }}</span>
+      </div>
+
+      {% if request.user.is_authenticated %}
+      <div class="user-info">
+        <span class="username">
+          <i class="fas fa-user"></i>
+          {{ request.user.username }}
+        </span>
+        <a href="{% url 'logout' %}" class="btn btn-logout">
+          <i class="fas fa-sign-out-alt"></i>
+          {{ t.logout|default:"Выйти" }}
+        </a>
+      </div>
+      {% endif %}
+    </header>
+
+    <!-- Сообщения -->
+    {% if messages %}
+      <div class="flash-messages">
+        {% for message in messages %}
+          <div class="flash flash-{{ message.tags }}">
+            <i class="fas fa-{% if message.tags == 'success' %}check-circle{% elif message.tags == 'error' %}exclamation-circle{% else %}info-circle{% endif %}"></i>
+            {{ message }}
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    <section class="card main-card">
+      <div class="welcome-section">
+        {% if not request.user.is_authenticated %}
+          <h2><i class="fas fa-door-open"></i> {{ t.welcome }}</h2>
+          <p class="intro-text">
+            {{ t.welcome_message|default:'Добро пожаловать в систему биометрической аутентификации. Для доступа к защищенным ресурсам требуется регистрация и вход с использованием лица и голоса.' }}
+          </p>
+
+          <div class="action-buttons">
+            <a class="btn btn-primary btn-lg" href="{% url 'register' %}">
+              <i class="fas fa-user-plus"></i>
+              {{ t.btn_register|default:'Регистрация' }}
+            </a>
+            <a class="btn btn-outline btn-lg" href="{% url 'login' %}">
+              <i class="fas fa-sign-in-alt"></i>
+              {{ t.btn_login|default:'Вход' }}
+            </a>
+          </div>
+
+          <div class="features">
+            <div class="feature">
+              <i class="fas fa-camera"></i>
+              <h3>{{ t.face_auth|default:'Аутентификация по лицу' }}</h3>
+              <p>{{ t.face_auth_desc|default:'Распознавание лица с помощью нейронных сетей' }}</p>
+            </div>
+            <div class="feature">
+              <i class="fas fa-microphone"></i>
+              <h3>{{ t.voice_auth|default:'Аутентификация по голосу' }}</h3>
+              <p>{{ t.voice_auth_desc|default:'Распознавание голоса и проверка фраз' }}</p>
+            </div>
+            <div class="feature">
+              <i class="fas fa-shield-alt"></i>
+              <h3>{{ t.security|default:'Безопасность' }}</h3>
+              <p>{{ t.security_desc|default:'Двухфакторная биометрическая защита' }}</p>
+            </div>
+          </div>
+        {% else %}
+          <div class="logged-in">
+            <h2><i class="fas fa-user-check"></i> {{ t.welcome_back|default:'С возвращением' }}, {{ request.user.username }}!</h2>
+            <p class="intro-text">
+              {{ t.already_logged_in|default:'Вы уже вошли в систему. Перейдите в личный кабинет для доступа к файлам.' }}
+            </p>
+
+            <div class="action-buttons">
+              <a class="btn btn-primary" href="{% url 'dashboard' %}">
+                <i class="fas fa-tachometer-alt"></i>
+                {{ t.dashboard|default:'Личный кабинет' }}
+              </a>
+              <a class="btn btn-outline" href="{% url 'logout' %}">
+                <i class="fas fa-sign-out-alt"></i>
+                {{ t.logout|default:'Выйти' }}
+              </a>
+            </div>
+          </div>
+        {% endif %}
+      </div>
+    </section>
+
+    <footer class="app-footer">
+      <p>&copy; {% now "Y" %} BiometricAuth System</p>
+      <p class="version">v1.0.0</p>
+    </footer>
+  </div>
+
+  <script>
+    document.querySelector('.lang-btn').addEventListener('click', function() {
+      document.getElementById('langSwitch').classList.toggle('open');
+    });
+
+    document.addEventListener('click', function(event) {
+      const langSwitch = document.getElementById('langSwitch');
+      if (!langSwitch.contains(event.target)) {
+        langSwitch.classList.remove('open');
+      }
+    });
+
+    document.addEventListener('DOMContentLoaded', function() {
+      const features = document.querySelectorAll('.feature');
+      features.forEach((feature, index) => {
+        feature.style.animationDelay = `${index * 0.1}s`;
+        feature.classList.add('animate-fadeIn');
+      });
+    });
+  </script>
+
+  <style>
+    .main-card {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 30px;
+    }
+    .welcome-section {
+      text-align: center;
+    }
+    .intro-text {
+      font-size: 1.1em;
+      line-height: 1.6;
+      margin: 20px 0 30px;
+      color: var(--text-secondary);
+      max-width: 600px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .action-buttons {
+      display: flex;
+      gap: 15px;
+      justify-content: center;
+      margin: 30px 0 40px;
+      flex-wrap: wrap;
+    }
+    .btn-lg {
+      padding: 15px 30px;
+      font-size: 1.1em;
+      min-width: 180px;
+    }
+    .features {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 25px;
+      margin-top: 40px;
+    }
+    .feature {
+      padding: 25px;
+      border-radius: 12px;
+      background: rgba(var(--primary-color-rgb, 59, 130, 246), 0.05);
+      border: 1px solid var(--border-color);
+      transition: all 0.3s ease;
+    }
+    .feature:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+      border-color: var(--primary-color);
+    }
+    .feature i {
+      font-size: 2.5em;
+      color: var(--primary-color);
+      margin-bottom: 15px;
+    }
+    .feature h3 {
+      font-size: 1.2em;
+      margin: 10px 0;
+    }
+    .feature p {
+      color: var(--text-muted);
+      font-size: 0.95em;
+      line-height: 1.5;
+    }
+    .logged-in {
+      padding: 20px 0;
+    }
+    @media (max-width: 768px) {
+      .action-buttons {
+        flex-direction: column;
+        align-items: center;
+      }
+      .btn-lg {
+        width: 100%;
+        max-width: 300px;
+      }
+      .features {
+        grid-template-columns: 1fr;
+      }
+    }
+    @media (max-width: 480px) {
+      .main-card {
+        padding: 20px 15px;
+      }
+      .action-buttons {
+        gap: 10px;
+      }
+    }
+  </style>
+</body>
+</html>

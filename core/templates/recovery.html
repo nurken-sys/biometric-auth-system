@@ -1,0 +1,213 @@
+{% load static %}
+<!doctype html>
+<html lang="{{ lang|default:'ru' }}">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Support — BiometricAuth</title>
+  <link rel="stylesheet" href="{% static 'style.css' %}">
+  {% with "style_"|add:lang|default:"ru"|add:".css" as style_file %}
+    <link rel="stylesheet" href="{% static style_file %}">
+  {% endwith %}
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    .cam-container{position:relative;width:100%;max-width:400px;margin:20px auto;border-radius:16px;overflow:hidden;background:#000;}
+    #video{width:100%;display:block;transform:scaleX(-1)}
+    
+    /* Стили для чата */
+    .chat-container { display: none; background: rgba(0,0,0,0.2); border-radius: 12px; padding: 20px; margin-top: 20px; border: 1px solid var(--border-color); }
+    .chat-message { margin-bottom: 15px; padding: 12px 18px; border-radius: 12px; max-width: 85%; line-height: 1.4; }
+    .msg-user { background: rgba(59,130,246,0.15); border: 1px solid #3b82f6; margin-left: auto; text-align: right; }
+    .msg-admin { background: rgba(34,197,94,0.15); border: 1px solid #22c55e; margin-right: auto; }
+    .msg-system { background: transparent; color: var(--text-muted); text-align: center; font-style: italic; font-size: 0.9em; border: none; max-width: 100%; margin: 0 auto 15px; }
+  </style>
+</head>
+<body class="lang-{{ lang|default:'ru' }} theme-dark">
+  <div class="container">
+    <div style="display: none;">{% csrf_token %}</div>
+    
+    <header class="app-header">
+      <div class="app-title">
+        <h1><i class="fas fa-headset fa-beat-fade" style="color: var(--primary-color);"></i> <span id="ui_title">Служба поддержки</span></h1>
+      </div>
+    </header>
+
+    <section class="card" id="formSection">
+      <div class="form-group">
+        <label id="ui_reason_lbl">Причина обращения</label>
+        <select id="reason" style="width:100%; padding:10px; border-radius:8px; background:var(--bg-tertiary); color:#fff; border:1px solid var(--border-color);">
+          <option value="forgot_name" id="opt_name" style="color: #000; background: #fff;">Я забыл свой никнейм</option>
+          <option value="face_changed" id="opt_face" style="color: #000; background: #fff;">Система меня не узнает</option>
+          <option value="other" id="opt_other" style="color: #000; background: #fff;">Другая проблема</option>
+        </select>
+      </div>
+
+      <div class="cam-container">
+        <video id="video" autoplay playsinline muted></video>
+      </div>
+      <p id="ui_cam_hint" style="text-align:center; color:var(--text-muted); font-size:0.9em;">Система сделает снимок для идентификации.</p>
+      
+      <canvas id="photoCanvas" style="display:none;"></canvas>
+      <div id="statusMessages"></div>
+
+      <div style="display:flex; gap:10px; margin-top:20px;">
+        <button class="btn btn-primary" id="sendBtn" style="flex:1;"><i class="fas fa-paper-plane"></i> <span id="ui_btn_send">Отправить запрос</span></button>
+        <a class="btn btn-outline" href="{% url 'login' %}" style="flex:1;"><i class="fas fa-arrow-left"></i> <span id="ui_btn_back">Назад</span></a>
+      </div>
+    </section>
+
+    <section class="card chat-container" id="chatSection">
+        <h3 style="text-align:center; margin-bottom: 20px;"><i class="fas fa-comments"></i> <span id="ui_chat_title">Чат с поддержкой</span></h3>
+        
+        <div id="chatHistory">
+            </div>
+
+        <div style="margin-top:20px;">
+            <a class="btn btn-primary" href="{% url 'login' %}" style="display:block; text-align:center; text-decoration:none;" id="ui_btn_done">Завершить и вернуться ко входу</a>
+        </div>
+    </section>
+  </div>
+
+<script>
+  // МУЛЬТИЯЗЫЧНЫЙ СЛОВАРЬ ДЛЯ ПОДДЕРЖКИ
+  const currentLang = "{{ lang|default:'ru' }}";
+  const msgDict = {
+    'ru': {
+        'title': 'Служба поддержки', 'reason_lbl': 'Причина обращения',
+        'opt_name': 'Я забыл свой уникальный никнейм', 'opt_face': 'Система меня не узнает (Нужна перерегистрация)', 'opt_other': 'Другая проблема',
+        'cam_hint': 'Система сделает снимок вашего лица для быстрой идентификации администратором.',
+        'btn_send': 'Отправить запрос', 'btn_back': 'Назад ко входу', 'btn_done': 'Завершить и вернуться ко входу',
+        'chat_title': 'Онлайн чат с поддержкой',
+        'sys_sending': 'Отправка данных...', 'sys_wait': 'Запрос передан! Администратор ищет ваши данные. Не закрывайте страницу...',
+        'err_cam': 'Ошибка камеры', 'you_sent': 'Вы отправили фото и запрос.', 'admin_name': 'Администратор'
+    },
+    'kz': {
+        'title': 'Қолдау қызметі', 'reason_lbl': 'Өтініш себебі',
+        'opt_name': 'Мен никнеймімді ұмыттым', 'opt_face': 'Жүйе мені танымайды (Қайта тіркелу қажет)', 'opt_other': 'Басқа мәселе',
+        'cam_hint': 'Жүйе әкімшіге сізді тез тану үшін бетіңізді суретке түсіреді.',
+        'btn_send': 'Сұранысты жіберу', 'btn_back': 'Кіру бетіне қайту', 'btn_done': 'Аяқтау және кіруге қайту',
+        'chat_title': 'Қолдау қызметімен онлайн чат',
+        'sys_sending': 'Деректерді жіберу...', 'sys_wait': 'Сұраныс жіберілді! Әкімші деректеріңізді іздеуде. Бетті жаппаңыз...',
+        'err_cam': 'Камера қатесі', 'you_sent': 'Сіз сурет пен сұраныс жібердіңіз.', 'admin_name': 'Әкімші'
+    },
+    'en': {
+        'title': 'Support Service', 'reason_lbl': 'Reason for request',
+        'opt_name': 'I forgot my unique nickname', 'opt_face': 'System does not recognize me (Need re-registration)', 'opt_other': 'Other issue',
+        'cam_hint': 'The system will take a picture of your face for quick identification by the admin.',
+        'btn_send': 'Send Request', 'btn_back': 'Back to Login', 'btn_done': 'Finish and back to Login',
+        'chat_title': 'Live Support Chat',
+        'sys_sending': 'Sending data...', 'sys_wait': 'Request sent! Admin is checking your data. Do not close this page...',
+        'err_cam': 'Camera error', 'you_sent': 'You sent a photo and request.', 'admin_name': 'Administrator'
+    }
+  };
+  const m = msgDict[currentLang] || msgDict['ru'];
+
+  // Применяем переводы при загрузке
+  document.getElementById('ui_title').innerText = m.title;
+  document.getElementById('ui_reason_lbl').innerText = m.reason_lbl;
+  document.getElementById('opt_name').innerText = m.opt_name;
+  document.getElementById('opt_face').innerText = m.opt_face;
+  document.getElementById('opt_other').innerText = m.opt_other;
+  document.getElementById('ui_cam_hint').innerText = m.cam_hint;
+  document.getElementById('ui_btn_send').innerText = m.btn_send;
+  document.getElementById('ui_btn_back').innerText = m.btn_back;
+  document.getElementById('ui_btn_done').innerText = m.btn_done;
+  document.getElementById('ui_chat_title').innerText = m.chat_title;
+
+  const video = document.getElementById('video');
+  const photoCanvas = document.getElementById('photoCanvas');
+  const sendBtn = document.getElementById('sendBtn');
+  const statusMessages = document.getElementById('statusMessages');
+  const chatHistory = document.getElementById('chatHistory');
+  const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+  function addChatMessage(text, type) {
+      const div = document.createElement('div');
+      div.className = `chat-message msg-${type}`;
+      
+      if(type === 'user') div.innerHTML = `<b>Вы:</b><br>${text}`;
+      else if (type === 'admin') div.innerHTML = `<b><i class="fas fa-headset"></i> ${m.admin_name}:</b><br>${text}`;
+      else div.innerHTML = text; // system
+      
+      chatHistory.appendChild(div);
+  }
+
+  async function initCamera(){
+    try{
+      const stream = await navigator.mediaDevices.getUserMedia({ video:{facingMode:'user'}, audio:false });
+      video.srcObject = stream;
+    }catch(err){ 
+        statusMessages.innerHTML = `<div style="color:red; padding:10px;">${m.err_cam}</div>`;
+        sendBtn.disabled = true; 
+    }
+  }
+
+  function takePhoto(){
+    photoCanvas.width = video.videoWidth; photoCanvas.height = video.videoHeight;
+    const ctx = photoCanvas.getContext('2d');
+    ctx.translate(photoCanvas.width, 0); ctx.scale(-1, 1); ctx.drawImage(video, 0, 0);
+    return new Promise(res=> photoCanvas.toBlob(b=>res(b), 'image/jpeg', 0.9));
+  }
+
+  sendBtn.addEventListener('click', async () => {
+    sendBtn.disabled = true;
+    sendBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${m.sys_sending}`;
+    
+    try {
+      const faceBlob = await takePhoto();
+      const fd = new FormData();
+      fd.append('reason', document.getElementById('reason').value);
+      fd.append('face_image', faceBlob, 'recovery_face.jpg');
+
+      const r = await fetch('{% url "recovery" %}', {
+        method:'POST', body:fd, headers:{ 'X-CSRFToken': csrfToken }
+      });
+      const data = await r.json();
+      
+      if(data.success) {
+        // Скрываем форму, показываем Чат
+        document.getElementById('formSection').style.display = 'none';
+        document.getElementById('chatSection').style.display = 'block';
+        
+        // Добавляем стартовые сообщения в чат
+        addChatMessage(`<i class="fas fa-image"></i> ${m.you_sent}`, 'user');
+        addChatMessage(`<i class="fas fa-circle-notch fa-spin"></i> ${m.sys_wait}`, 'system');
+
+        // Начинаем слушать ответ админа
+        const reqId = data.request_id; 
+        if (reqId) {
+            const pollInterval = setInterval(async () => {
+                try {
+                    const res = await fetch(`/api/recovery-status/${reqId}/`);
+                    const statusData = await res.json();
+                    
+                    // Если статус изменился с "Ожидает ответа" (pending)
+                    if (statusData.status !== 'pending' && statusData.status !== 'Ожидает ответа') {
+                        clearInterval(pollInterval); // Останавливаем опрос
+                        
+                        // Удаляем системное сообщение об ожидании
+                        chatHistory.removeChild(chatHistory.lastChild);
+                        
+                        // Выводим ответ админа
+                        let adminMsg = statusData.message && statusData.message !== '-' ? statusData.message : "Ваша заявка обработана.";
+                        addChatMessage(adminMsg, 'admin');
+                    }
+                } catch(err) {
+                    console.error("Ошибка сети", err);
+                }
+            }, 3000); // Опрос каждые 3 секунды
+        }
+      } else {
+        throw new Error(data.error);
+      }
+    } catch (e) {
+      statusMessages.innerHTML = `<div style="color:red; padding:10px;">${e.message}</div>`;
+      sendBtn.disabled = false;
+      sendBtn.innerHTML = `<i class="fas fa-paper-plane"></i> ${m.btn_send}`;
+    }
+  });
+
+  initCamera();
+</script>
+</body>
+</html>

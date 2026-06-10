@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ошибка - BiometricAuth</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0;
+            padding: 20px;
+            color: #fff;
+        }
+        .error-container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 500px;
+            width: 100%;
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .error-code {
+            font-size: 120px;
+            font-weight: bold;
+            margin: 0;
+            line-height: 1;
+            color: #ff6b6b;
+            text-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
+        }
+        .error-title {
+            font-size: 24px;
+            margin: 20px 0 10px;
+            font-weight: 600;
+        }
+        .error-message {
+            font-size: 16px;
+            margin-bottom: 30px;
+            line-height: 1.6;
+            opacity: 0.9;
+        }
+        .home-button {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 40px;
+            border-radius: 50px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 16px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+        }
+        .home-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 15px 40px rgba(102, 126, 234, 0.6);
+        }
+        .back-button {
+            display: inline-block;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            padding: 12px 30px;
+            border-radius: 50px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 14px;
+            margin-top: 15px;
+            transition: all 0.3s ease;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .back-button:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        .error-details {
+            margin-top: 25px;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
+            font-family: monospace;
+            font-size: 14px;
+            text-align: left;
+            max-height: 150px;
+            overflow-y: auto;
+            word-break: break-all;
+        }
+    </style>
+</head>
+<body>
+    <div class="error-container">
+        <h1 class="error-code">
+            {{ error_code|default:"500" }}
+        </h1>
+
+        <h2 class="error-title">
+            {{ error_title|default:"Внутренняя ошибка сервера" }}
+        </h2>
+
+        <p class="error-message">
+            {{ error|default:"Произошла непредвиденная ошибка. Пожалуйста, попробуйте позже." }}
+        </p>
+
+        <a href="{% url 'index' %}" class="home-button">На главную</a>
+
+        <div style="margin-top: 30px;">
+            <a href="javascript:history.back()" class="back-button">Вернуться назад</a>
+        </div>
+
+        {% if request.GET.debug %}
+        <div class="error-details">
+            <strong>Детали ошибки:</strong><br>
+            {% if exception %}
+                {{ exception }}
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</body>
+</html>

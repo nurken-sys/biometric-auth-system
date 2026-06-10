@@ -1,0 +1,8 @@
+:root[lang="en"] {
+    --primary-color: #3b82f6;
+    --accent-color: #f97316;
+}
+
+body.lang-en {
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+}
